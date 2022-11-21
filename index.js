@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
@@ -11,12 +12,36 @@ app.use(express.json());
 //MongoDB
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@learnph.159fxoq.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
-// 
+
+//JWT Verify
+const verifyJWT = (req, res, next) =>{
+    const authHeader= req.headers.authorization;
+    if(!authHeader){
+        return res.status(401).send({message: 'unauthorized access'})
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) =>{
+        if(error){
+            return res.status(403).send({message: 'Forbidden access'})
+        }
+        req.decoded = decoded;
+        next();
+    })
+};
+
+//To Genarate Access Tokhn write "node" in server side cmd then put "require('crypto').randomBytes(64).toString('hex')" this to genarate.
 const run = async() =>{
     try{
         const servicesCollection = client.db('geniusCarDB').collection('services');
         const orderCollection = client.db('geniusCarDB').collection('orders');
-        console.log('db connected')
+        
+        //Genarate JWT Token
+        app.post('/jwt', (req, res) =>{
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1hr'});
+            res.send({token});
+        });
+
         app.get('/services', async(req, res) =>{
             const query = {};
             const cursor = servicesCollection.find(query);
@@ -33,14 +58,18 @@ const run = async() =>{
 
 
         //Orders API
-        app.post('/orders', async(req, res) =>{
+        app.post('/orders', verifyJWT, async(req, res) =>{
             const order = req.body;
             const result = await orderCollection.insertOne(order);
             res.send(result);
         });
 
-        app.get('/orders', async(req, res) =>{
-            console.log(req.query.email);
+        app.get('/orders', verifyJWT, async(req, res) =>{
+            const decoded = req.decoded;
+            if(decoded.email !== req.query.email){
+                return res.status(403).send({message: 'unauthorized access'});
+            }
+
             let query = {};
             if(req.query.email){
                 query = {
@@ -52,7 +81,7 @@ const run = async() =>{
             res.send(orders);
         });
 
-        app.patch('/orders/:id', async(req, res)=>{
+        app.patch('/orders/:id', verifyJWT, async(req, res)=>{
             const id = req.params.id;
             const status = req.body.status;
             const query = {_id: ObjectId(id)};
