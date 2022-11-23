@@ -9,7 +9,7 @@ require('dotenv').config()
 app.use(cors());
 app.use(express.json());
 
-//MongoDB
+//MongoDB Database
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@learnph.159fxoq.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
@@ -43,12 +43,16 @@ const run = async() =>{
         });
 
         app.get('/services', async(req, res) =>{
-            const query = {};
-            const cursor = servicesCollection.find(query);
+            //setting Price Range (Less then 20 or Greater then 20 or (Greater then 20 || Less then 50))
+            const query = {price: {$gte: 30, $lt: 100}};
+            //Sorting Price order(A-Z or 1-10)
+            const setOrder = req.query.order === "asce" ? 1 : -1;
+            const cursor = servicesCollection.find(query).sort({price : setOrder});
             const services = await cursor.toArray();
             res.send(services);
         });
 
+        //Get Each Service Details With Params
         app.get('/services/:id', async(req, res) =>{
             const id = req.params.id;
             const query = {_id: ObjectId(id)};
@@ -57,17 +61,18 @@ const run = async() =>{
         });
 
 
-        //Orders API
+        //Store Each Orders Data to DataBase (JWT Verification Included)
         app.post('/orders', verifyJWT, async(req, res) =>{
             const order = req.body;
             const result = await orderCollection.insertOne(order);
             res.send(result);
         });
 
+        //Display Specific Order Data to Specific User With Query (JWT Verification Included)
         app.get('/orders', verifyJWT, async(req, res) =>{
             const decoded = req.decoded;
             if(decoded.email !== req.query.email){
-                return res.status(403).send({message: 'unauthorized access'});
+                return res.status(403).send({message: 'Unauthorized Access'});
             }
 
             let query = {};
@@ -81,6 +86,7 @@ const run = async() =>{
             res.send(orders);
         });
 
+        //Setting or Updating Order Data With Params (JWT Verification Included)
         app.patch('/orders/:id', verifyJWT, async(req, res)=>{
             const id = req.params.id;
             const status = req.body.status;
@@ -93,7 +99,7 @@ const run = async() =>{
             const result = await orderCollection.updateOne(query, updatedDoc);
             res.send(result);
         });
-
+        //Deleting Order With Params
         app.delete('/orders/:id', async(req, res) =>{
             const id = req.params.id;
             const query = {_id: ObjectId(id)};
