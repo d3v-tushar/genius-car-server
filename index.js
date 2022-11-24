@@ -44,9 +44,18 @@ const run = async() =>{
 
         app.get('/services', async(req, res) =>{
             //setting Price Range (Less then 20 or Greater then 20 or (Greater then 20 || Less then 50))
-            const query = {price: {$gte: 30, $lt: 100}};
+            //const query = {price: {$gte: 30, $lt: 100}};
+
             //Sorting Price order(A-Z or 1-10)
             const setOrder = req.query.order === "asce" ? 1 : -1;
+
+            //Search Query $text 
+            let query = {};
+            const search = req.query.search;
+            if(search.length){
+                query = {$text: {$search: search}};
+            };
+
             const cursor = servicesCollection.find(query).sort({price : setOrder});
             const services = await cursor.toArray();
             res.send(services);
